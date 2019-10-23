@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>InvoiceSharing Merge CSV</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/4.6.0/papaparse.js"></script>
+
+    <style>
+        body {
+            font-family: Calibri, Candara, Segoe, Segoe UI, Optima, Arial, sans-serif;
+            font-size: 11px;
+        }
+
+        table {
+            font-size: 11px;
+        }
+    </style>
+
+    <script type="application/javascript">
+        function mergeCsvs(element) {
+            $('#progress').show();
+            $('#form').hide();
+            let files         = element.files;
+            let finished      = 0;
+            let csvs          = [];
+            let fields        = [];
+            let lastDelimiter = ',';
+            let lastLineBreak = "\n";
+
+            for(let x in files) {
+                if(x != parseInt(x)) {
+                    continue;
+                }
+                Papa.parse(files[ x ], {
+                    header:         true,
+                    skipEmptyLines: true,
+                    delimiter:      $('#delimiterSource').val(),
+                    complete:       function(result) {
+
+                        lastDelimiter = result.meta.delimiter;
+                        lastLineBreak = result.meta.linebreak;
+                        csvs.push(result.data);
+                        fields = [ ...fields, ...result.meta.fields ];
+
+                        if(++finished === files.length) {
+                            csvParseFinished(fields, csvs, lastDelimiter, lastLineBreak);
+                        }
+                    }
+                });
+            }
+
+        }
+
+        function csvParseFinished(fields, csvs, delimiter, lineBreak) {
+            let headers = getHeaders(csvs, fields);
+            let newCsv  = [];
+
+            for(let x in csvs) {
+                let csv = csvs[ x ];
+                for(let y in csv) {
+                    newCsv.push({ ...headers, ...csv[ y ] });
+                }
+            }
+
+            newCsv = Papa.unparse(newCsv, {
+                header:    true,
+                delimiter: $('#delimiter').val(),
+                newline:   lineBreak,
+
+            });
+
+            download(newCsv);
+
+            $('#files').val('');
+            $('#progress').hide();
+            $('#form').show();
+        }
+
+        function getHeaders(csvs, fields) {
+            let headers = {};
+            for(let x in csvs) {
+                for(let key in csvs[ x ][ 0 ]) {
+                    if(typeof headers[ key ] === 'undefined' && '' != key) {
+                        headers[ key ] = '';
+                    }
+                }
+            }
+
+            for(let x in fields) {
+                if(typeof headers[ fields[ x ] ] === 'undefined' && '' != fields[ x ]) {
+                    headers[ fields[ x ] ] = '';
+                }
+            }
+            return headers;
+        }
+
+        function download(content) {
+            if(null === document.getElementById('download')) {
+                $(document.body).append('<a download id="download" style="display:none;"></a>');
+            }
+            let download      = document.getElementById('download');
+            download.download = $('#fileName').val() + '.csv';
+            download.href     = window.URL.createObjectURL(new Blob([ content ], { type: 'text/csv' }));
+
+            download.click();
+        }
+    </script>
+
+    <script type="application/javascript">
+        $(document).ready(function() {
+            $('#delimiterSource').val(localStorage.getItem('delimiterSource'));
+            let destDelimiter = localStorage.getItem('delimiter');
+            if(null === destDelimiter) {
+                let userLang = navigator.language || navigator.userLanguage;
+                if('nl-NL' === userLang) {
+                    destDelimiter = ';';
+                } else {
+                    destDelimiter = ',';
+                }
+            }
+            $('#delimiter').val(destDelimiter);
+
+        });
+    </script>
+</head>
+<body>
+<div id="form">
+    Input delimiter:
+    <select id="delimiterSource" onchange="localStorage.setItem('delimiterSource', $(this).val());">
+        <option value="">Auto delimiter</option>
+        <option value=",">Comma</option>
+        <option value=";">Semicolon</option>
+    </select>
+    <br>
+    Output delimiter:
+    <select id="delimiter" onchange="localStorage.setItem('delimiter', $(this).val());">
+        <option value=",">Comma</option>
+        <option value=";">Semicolon</option>
+    </select>
+    <br>
+    File name: <input id="fileName" size="7" value="Merged" style="border:none;text-align:right;" onkeyup="this.size=this.value.length;" onblur="this.size=this.size=this.value.length;">.csv
+    <br>
+    <br>
+    <input id="files" type="file" multiple accept=".csv" onchange="mergeCsvs(this);" />
+    <br>
+</div>
+<div id="progress" style="display:none;">
+    <progress IsIndeterminate></progress>
+</div>
+</body>
+</html>
+
